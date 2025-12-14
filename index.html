@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>用電與過載檢查器</title>
+  <style>
+    :root{--bg:#0b1220;--card:#101a30;--line:#23304a;--text:#e5e7eb;--muted:#9aa7bd;--accent:#38bdf8;--warn:#f59e0b;--bad:#ef4444;--ok:#22c55e;}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans TC",sans-serif;background:linear-gradient(180deg,#070e1d,#0b1220);color:var(--text);}
+    .wrap{max-width:1100px;margin:0 auto;padding:22px}
+    h1{margin:0;font-size:22px}
+    .sub{margin:8px 0 0;color:var(--muted);font-size:13px;line-height:1.6}
+    .grid{display:grid;grid-template-columns:1.25fr .75fr;gap:14px;margin-top:14px}
+    @media (max-width: 900px){.grid{grid-template-columns:1fr}}
+    .card{background:rgba(16,26,48,.88);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 14px 34px rgba(0,0,0,.28)}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    @media (max-width:560px){.row{grid-template-columns:1fr}}
+    label{display:block;color:var(--muted);font-size:12px;margin:8px 0 6px}
+    input,select{width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:#071024;color:var(--text);outline:none}
+    input:focus,select:focus{border-color:rgba(56,189,248,.7);box-shadow:0 0 0 3px rgba(56,189,248,.12)}
+    button{border:1px solid var(--line);background:rgba(255,255,255,.04);color:var(--text);padding:10px 12px;border-radius:12px;cursor:pointer}
+    button.primary{border-color:rgba(56,189,248,.7);background:rgba(56,189,248,.12)}
+    table{width:100%;border-collapse:separate;border-spacing:0 8px}
+    th{color:var(--muted);font-weight:600;font-size:12px;text-align:left;padding:0 8px}
+    td{padding:0 8px}
+    .item{background:rgba(0,0,0,.18);border:1px solid var(--line);border-radius:14px}
+    .item td{padding:10px 8px}
+    .pill{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:999px;border:1px solid var(--line);background:rgba(0,0,0,.18);font-size:12px;color:var(--muted)}
+    .status{padding:10px 12px;border-radius:14px;border:1px dashed rgba(148,163,184,.35);background:rgba(0,0,0,.18);margin-top:10px;line-height:1.6}
+    .ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
+    .btnbar{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+    .small{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.6}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>家用用電與延長線過載檢查器</h1>
+  <div class="sub">
+    輸入家電瓦數/數量/每天使用時間，立刻算出 <span class="mono">總功率(W)</span>、<span class="mono">電流(A)</span>、<span class="mono">月耗電(kWh)</span> 與過載風險。<br/>
+    ※ 電價請自行輸入每度電單價；本工具為估算用途，實際以現場設備標示與專業人員判定為準。
+  </div>
+
+  <div class="grid">
+    <!-- Left: Items -->
+    <div class="card">
+      <div class="row">
+        <div>
+          <label>電壓（計算用）</label>
+          <select id="voltage">
+            <option value="110">110 V（一般插座）</option>
+            <option value="220">220 V（部分設備）</option>
+          </select>
+        </div>
+        <div>
+          <label>每度電單價（估算用）</label>
+          <input id="price" type="number" step="any" value="3.0" />
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>安全上限（A）— 你可用延長線/插座/斷路器標示來填</label>
+          <input id="limitA" type="number" step="any" value="10" />
+        </div>
+        <div>
+          <label>每月天數（估算用）</label>
+          <input id="days" type="number" step="1" value="30" />
+        </div>
+      </div>
+
+      <div class="btnbar">
+        <button class="primary" id="add">＋新增家電</button>
+        <button id="clear">清空清單</button>
+        <span class="pill">會自動儲存到瀏覽器（重新整理不會不見）</span>
+      </div>
+
+      <div style="margin-top:12px">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:28%">名稱</th>
+              <th style="width:18%">瓦數 W</th>
+              <th style="width:14%">數量</th>
+              <th style="width:22%">每天小時</th>
+              <th style="width:18%">操作</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="small">
+        建議 Demo：新增「吹風機 1200W」「電風扇 60W」「筆電 90W」，切換 110V/220V 看電流差異與警示提示。
+      </div>
+    </div>
+
+    <!-- Right: Results -->
+    <div class="card">
+      <h2 style="margin:0 0 10px;font-size:18px">結果</h2>
+
+      <div class="status" id="resultBox">
+        <div>總功率：<span class="mono" id="totalW">—</span> W</div>
+        <div>估算電流：<span class="mono" id="totalA">—</span> A</div>
+        <div>月耗電：<span class="mono" id="kwh">—</span> kWh</div>
+        <div>電費估算：<span class="mono" id="cost">—</span></div>
+        <div style="margin-top:8px" id="riskLine">風險提示：—</div>
+      </div>
+
+      <div class="small">
+        小提醒：插座/延長線常見標示如 10A / 15A；如果你不確定，就先填保守一點（例如 10A），比較安全。
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = (id)=>document.getElementById(id);
+
+  const KEY = "power_tool_items_v1";
+  let items = [];
+
+  function load(){
+    try{
+      const raw = localStorage.getItem(KEY);
+      items = raw ? JSON.parse(raw) : [];
+      if(!Array.isArray(items)) items = [];
+    }catch{ items = []; }
+  }
+  function save(){ localStorage.setItem(KEY, JSON.stringify(items)); }
+
+  function fmt(n, d=2){
+    if(!isFinite(n)) return "—";
+    return Number(n).toFixed(d);
+  }
+  function money(n){
+    if(!isFinite(n)) return "—";
+    return "NT$ " + n.toFixed(0);
+  }
+
+  function addItem(){
+    items.push({ name:"家電", w:100, qty:1, h:1 });
+    save(); render();
+  }
+
+  function removeItem(i){
+    items.splice(i,1);
+    save(); render();
+  }
+
+  function render(){
+    const tb = $("tbody");
+    tb.innerHTML = "";
+
+    items.forEach((it, i)=>{
+      const tr = document.createElement("tr");
+      tr.className = "item";
+      tr.innerHTML = `
+        <td><input value="${escapeHtml(it.name)}" data-i="${i}" data-k="name"/></td>
+        <td><input type="number" step="any" value="${it.w}" data-i="${i}" data-k="w"/></td>
+        <td><input type="number" step="1" value="${it.qty}" data-i="${i}" data-k="qty"/></td>
+        <td><input type="number" step="any" value="${it.h}" data-i="${i}" data-k="h"/></td>
+        <td><button data-rm="${i}">刪除</button></td>
+      `;
+      tb.appendChild(tr);
+    });
+
+    tb.querySelectorAll("input").forEach(inp=>{
+      inp.addEventListener("input", ()=>{
+        const i = Number(inp.dataset.i);
+        const k = inp.dataset.k;
+        let v = inp.value;
+
+        if(k==="w" || k==="qty" || k==="h"){
+          v = Number(v);
+          if(!isFinite(v)) v = 0;
+          if(v < 0) v = 0;
+        }
+        items[i][k] = (k==="name") ? inp.value : v;
+        save();
+        calc();
+      });
+    });
+
+    tb.querySelectorAll("button[data-rm]").forEach(btn=>{
+      btn.addEventListener("click", ()=> removeItem(Number(btn.dataset.rm)));
+    });
+
+    calc();
+  }
+
+  function calc(){
+    const V = Number($("voltage").value);
+    const price = Number($("price").value);
+    const limitA = Number($("limitA").value);
+    const days = Number($("days").value);
+
+    let totalW = 0;
+    let kwh = 0;
+
+    for(const it of items){
+      const w = Number(it.w)||0;
+      const q = Number(it.qty)||0;
+      const h = Number(it.h)||0;
+      totalW += w*q;
+      kwh += (w*q*h*(Number(days)||0))/1000.0;
+    }
+
+    const A = (V>0) ? totalW / V : NaN;
+    const cost = kwh * (Number(price)||0);
+
+    $("totalW").textContent = fmt(totalW, 0);
+    $("totalA").textContent = fmt(A, 2);
+    $("kwh").textContent = fmt(kwh, 2);
+    $("cost").textContent = money(cost);
+
+    // Risk line
+    const risk = $("riskLine");
+    risk.className = "";
+    if(!items.length){
+      risk.textContent = "風險提示：請先新增家電清單。";
+      risk.classList.add("warn");
+      return;
+    }
+    if(!isFinite(A) || A<=0){
+      risk.textContent = "風險提示：輸入值不正確。";
+      risk.classList.add("warn");
+      return;
+    }
+
+    const L = Number(limitA);
+    if(isFinite(L) && L>0){
+      const ratio = A / L;
+      if(ratio < 0.8){
+        risk.textContent = `風險提示：目前約 ${fmt(ratio*100,0)}% 上限（較安全）。`;
+        risk.classList.add("ok");
+      }else if(ratio <= 1.0){
+        risk.textContent = `風險提示：目前約 ${fmt(ratio*100,0)}% 上限（接近上限，建議分流）。`;
+        risk.classList.add("warn");
+      }else{
+        risk.textContent = `風險提示：已超過上限！約 ${fmt(ratio*100,0)}%（可能過載，請降低負載或分流）。`;
+        risk.classList.add("bad");
+      }
+    }else{
+      risk.textContent = "風險提示：未設定上限(A)，可輸入延長線/插座/斷路器標示來檢查。";
+      risk.classList.add("warn");
+    }
+  }
+
+  function escapeHtml(s){
+    return String(s)
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
+  // events
+  $("add").addEventListener("click", addItem);
+  $("clear").addEventListener("click", ()=>{
+    items = [];
+    save(); render();
+  });
+  $("voltage").addEventListener("change", calc);
+  $("price").addEventListener("input", calc);
+  $("limitA").addEventListener("input", calc);
+  $("days").addEventListener("input", calc);
+
+  // init
+  load();
+  if(items.length===0){
+    // 內建一些 demo 範例，打開就有成果
+    items = [
+      {name:"吹風機", w:1200, qty:1, h:0.2},
+      {name:"電風扇", w:60, qty:1, h:6},
+      {name:"筆電",   w:90, qty:1, h:4},
+    ];
+    save();
+  }
+  render();
+</script>
+</body>
+</html>
